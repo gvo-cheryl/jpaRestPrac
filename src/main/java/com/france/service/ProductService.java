@@ -1,13 +1,7 @@
 package com.france.service;
 
-import com.france.domain.Option;
-import com.france.domain.Product;
-import com.france.domain.Image;
-import com.france.domain.Variant;
-import com.france.repository.ImagesRepository;
-import com.france.repository.OptionsRepository;
-import com.france.repository.ProductRepository;
-import com.france.repository.VariantsRepository;
+import com.france.domain.*;
+import com.france.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.json.simple.JSONArray;
@@ -36,19 +30,22 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ImagesRepository imagesRepository;
+    private final VariantIdRepository variantIdRepository;
     private final OptionsRepository optionsRepository;
     private final VariantsRepository variantsRepository;
 
-    private List<Image> imageList;
+    private JSONArray imageJsonList, variantJsonList;
+    private List<VariantId> variantIds;
 
     // insert
     public JSONArray saveList() throws ParseException {
         JSONArray jsonArray = parseList(getProductsFromAPI());
         List<Product> productList = getProductList(jsonArray);
         productRepository.saveAll(productList);
-        imagesRepository.saveAll(imageList);
+        imagesRepository.saveAll(getImageList(imageJsonList));
         optionsRepository.saveAll(getOptionList(jsonArray));
-        variantsRepository.saveAll(getVariantList(jsonArray));
+        variantsRepository.saveAll(getVariantList(variantJsonList));
+        variantIdRepository.saveAll(variantIds);
 
         return jsonArray;
     }
@@ -93,9 +90,11 @@ public class ProductService {
     }
 
     protected JSONArray getProductList(JSONArray jsonArray){
-        imageList = new ArrayList<>();
+        imageJsonList = new JSONArray();
+        variantJsonList = new JSONArray();
         JSONArray productList = new JSONArray();
         for (int i = 0; i < jsonArray.size(); i++) {
+            List<Image> imgList = new ArrayList<Image>();
             JSONObject product = (JSONObject) jsonArray.get(i);
             Product newProduct = Product.builder()
                     .id(Long.parseLong(product.get("id").toString()))
@@ -103,29 +102,34 @@ public class ProductService {
                     .vendor(product.get("vendor").toString())
                     .createdAt(parseDate(product.get("created_at")))
                     .updatedAt(parseDate(product.get("updated_at")))
+                    .productImagesList(new ArrayList<>())
+                    .variantList(new ArrayList<>())
                     .build();
-            if (product.get("images")!=null){
-                getImageList((JSONArray) product.get("images"), newProduct);
-            }
+            if (product.get("images")!=null){getImageJsonList((JSONArray) product.get("images")); }
+            if (product.get("variants")!=null){ getVariantJsonList((JSONArray) product.get("variants")); }
             productList.add(newProduct);
         }
         return productList;
     }
 
-    protected void getImageList(JSONArray imageTotalList, Product product){
-        Iterator itr = imageTotalList.iterator();
-        while(itr.hasNext()) {
-            JSONObject image = (JSONObject) itr.next();
+    protected List<Image> getImageList(JSONArray imageJsonList){
+        List<Image> imageList = new ArrayList<Image>();
+        for(int i = 0; i<imageJsonList.size(); i++){
+            JSONObject image = (JSONObject) imageJsonList.get(i);
+            Product product = productRepository.findById(Long.parseLong(image.get("product_id").toString())).get();
             Image newImage = Image.builder()
                     .imageId(Long.parseLong(image.get("id").toString()))
                     .position(image.get("position").toString())
                     .created_at(parseDate(image.get("created_at")))
                     .updated_at(parseDate(image.get("updated_at")))
                     .imagePath(image.get("src").toString())
+                    .variantIds(new ArrayList<>())
                     .product(product)
                     .build();
-                imageList.add(newImage);
+            product.getProductImagesList().add(newImage);
+            imageList.add(newImage);
         }
+        return imageList;
     }
 
     protected List<Option> getOptionList(JSONArray jsonArray){
@@ -150,29 +154,31 @@ public class ProductService {
         return optionList;
     }
 
-    protected List<Variant> getVariantList(JSONArray jsonArray){
-        JSONArray variantTotalList = new JSONArray();
-        List<Variant> variantList = new ArrayList<Variant>();
-        for(int i=0; i<jsonArray.size(); i++){
-            JSONObject jsonProduct = (JSONObject) jsonArray.get(i);
-            Long productId = Long.parseLong(jsonProduct.get("id").toString());
-            Optional<Product> product = productRepository.findById(productId);
-            variantTotalList = ((JSONArray) jsonProduct.get("variants"));
-            for(int j=0; j<variantTotalList.size(); j++){
-                JSONObject variant = (JSONObject) variantTotalList.get(j);
-                Variant newVariant = Variant.builder()
+    protected List<Variant> getVariantList(JSONArray variantTotalList){
+        List<Variant> variantList = new ArrayList<>();
+        variantIds = new ArrayList<>();
+        for(int i=0; i<variantTotalList.size(); i++){
+            JSONObject variant = (JSONObject) variantTotalList.get(i);
+            Product product = productRepository.findById(Long.parseLong(variant.get("product_id").toString())).get();
+            Variant newVariant = Variant.builder()
                         .variantId(Long.parseLong(variant.get("id").toString()))
-                        .title(variant.get("id").toString())
+                        .title(variant.get("title").toString())
                         .price(Double.parseDouble(variant.get("price").toString()))
-                        .product(product.get())
+                        .product(product)
                         .build();
+            product.getVariantList().add(newVariant);
 
-                if(variant.get("image_id")!=null){
-                    Image image = imagesRepository.findById(Long.parseLong(String.valueOf(variant.get("image_id")))).get();
-                    newVariant.setImage(image);
-                }
-                variantList.add(newVariant);
+            if(variant.get("image_id")!=null){
+                Image image = imagesRepository.findById(Long.parseLong(variant.get("image_id").toString())).get();
+                VariantId variantId = VariantId.builder()
+                        .variantId(Long.parseLong(variant.get("id").toString()))
+                        .image(image)
+                        .build();
+                image.getVariantIds().add(variantId);
+                newVariant.setImage_id(Long.parseLong(variant.get("id").toString()));
+                variantIds.add(variantId);
             }
+            variantList.add(newVariant);
         }
         return variantList;
     }
@@ -181,4 +187,19 @@ public class ProductService {
         LocalDateTime localDateTime = LocalDateTime.parse(object.toString().substring(0,19));
         return localDateTime;
     }
+
+    protected void getImageJsonList(JSONArray jsonArray){
+        for(int i = 0; i<jsonArray.size(); i++){
+            JSONObject jsonObject= (JSONObject)jsonArray.get(i);
+            imageJsonList.add(jsonObject);
+        }
+    }
+
+    protected void getVariantJsonList(JSONArray jsonArray){
+        for(int i = 0; i<jsonArray.size(); i++){
+            JSONObject jsonObject= (JSONObject)jsonArray.get(i);
+            variantJsonList.add(jsonObject);
+        }
+    }
+
 }

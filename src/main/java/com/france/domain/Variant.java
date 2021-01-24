@@ -17,10 +17,12 @@ public class Variant {
     private Long variantId;
     private String title;
     private Double price;
+    @Column(name = "image_id")
+    private Long image_id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "image_id")
-    private Image image;
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "image_id")
+//    private Image image;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")

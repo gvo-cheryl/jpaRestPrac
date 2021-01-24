@@ -26,7 +26,8 @@ public class Image {
     @JoinColumn(name = "product_id")
     private Product product;
 
-    @OneToMany
-    private List<Variant> variantList;
+    @OneToMany(mappedBy = "image")
+
+    private List<VariantId> variantIds;
 
 }
