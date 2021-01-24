@@ -44,7 +44,6 @@ public class ProductService {
     // insert
     public JSONArray saveList() throws ParseException {
         JSONArray jsonArray = parseList(getProductsFromAPI());
-
         List<Product> productList = getProductList(jsonArray);
         productRepository.saveAll(productList);
         imagesRepository.saveAll(imageList);
@@ -161,7 +160,6 @@ public class ProductService {
             variantTotalList = ((JSONArray) jsonProduct.get("variants"));
             for(int j=0; j<variantTotalList.size(); j++){
                 JSONObject variant = (JSONObject) variantTotalList.get(j);
-
                 Variant newVariant = Variant.builder()
                         .variantId(Long.parseLong(variant.get("id").toString()))
                         .title(variant.get("id").toString())
