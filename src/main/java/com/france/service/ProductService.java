@@ -25,6 +25,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,25 +39,17 @@ public class ProductService {
     private final OptionsRepository optionsRepository;
     private final VariantsRepository variantsRepository;
 
-    // List insert
+    private List<Image> imageList;
+
+    // insert
     public JSONArray saveList() throws ParseException {
         JSONArray jsonArray = parseList(getProductsFromAPI());
 
-        // 1. products
         List<Product> productList = getProductList(jsonArray);
         productRepository.saveAll(productList);
-
-        // 2. images
-        imagesRepository.saveAll(getImageList(jsonArray));
-
-        // 3. options
+        imagesRepository.saveAll(imageList);
         optionsRepository.saveAll(getOptionList(jsonArray));
-
-        // 4. variants
         variantsRepository.saveAll(getVariantList(jsonArray));
-
-        // 5. find test
-        System.out.println("variantId: " + variantsRepository.findById(21709518110838L));
 
         return jsonArray;
     }
@@ -100,9 +93,9 @@ public class ProductService {
         return jsonArray;
     }
 
-    protected List<Product> getProductList(JSONArray jsonArray){
-        List<Product> productList = new ArrayList<>();
-
+    protected JSONArray getProductList(JSONArray jsonArray){
+        imageList = new ArrayList<>();
+        JSONArray productList = new JSONArray();
         for (int i = 0; i < jsonArray.size(); i++) {
             JSONObject product = (JSONObject) jsonArray.get(i);
             Product newProduct = Product.builder()
@@ -112,35 +105,28 @@ public class ProductService {
                     .createdAt(parseDate(product.get("created_at")))
                     .updatedAt(parseDate(product.get("updated_at")))
                     .build();
-
-            JSONArray imageTotalList = ((JSONArray) product.get("images"));
+            if (product.get("images")!=null){
+                getImageList((JSONArray) product.get("images"), newProduct);
+            }
             productList.add(newProduct);
         }
         return productList;
     }
 
-    protected List<Image> getImageList(JSONArray jsonArray){
-        List<Image> imageList = new ArrayList<Image>();
-        for(int i =0; i<jsonArray.size(); i++) {
-            JSONObject jsonProduct = (JSONObject) jsonArray.get(i);
-            Long productId = Long.parseLong(jsonProduct.get("id").toString());
-            Optional<Product> product = productRepository.findById(productId);
-            JSONArray imageTotalList = ((JSONArray) jsonProduct.get("images"));
-            for (int j = 0; j < imageTotalList.size(); j++) {
-                JSONObject image = (JSONObject) imageTotalList.get(j);
-                Image newImage = Image.builder()
-                        .imageId(Long.parseLong(image.get("id").toString()))
-                        .position(image.get("position").toString())
-                        .created_at(parseDate(image.get("created_at")))
-                        .updated_at(parseDate(image.get("updated_at")))
-                        .imagePath(image.get("src").toString())
-                        .product(product.get())
-                        .build();
-
+    protected void getImageList(JSONArray imageTotalList, Product product){
+        Iterator itr = imageTotalList.iterator();
+        while(itr.hasNext()) {
+            JSONObject image = (JSONObject) itr.next();
+            Image newImage = Image.builder()
+                    .imageId(Long.parseLong(image.get("id").toString()))
+                    .position(image.get("position").toString())
+                    .created_at(parseDate(image.get("created_at")))
+                    .updated_at(parseDate(image.get("updated_at")))
+                    .imagePath(image.get("src").toString())
+                    .product(product)
+                    .build();
                 imageList.add(newImage);
-            }
         }
-        return imageList;
     }
 
     protected List<Option> getOptionList(JSONArray jsonArray){
